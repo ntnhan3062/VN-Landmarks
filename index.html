@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xem File</title>
+    <title>VN-Landmarks</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/viewerjs/1.11.3/viewer.min.css">
     <style>
         * {
             overflow: hidden;
@@ -26,7 +25,7 @@
         body {
             min-width: 320px;
             min-height: 570px;
-            background-color: #ccc;
+            background-color: #eee;
             display: flex;
             flex-direction: row;
             gap: 10px;
@@ -34,10 +33,6 @@
             box-sizing: border-box;
             height: 100vh;
             transition: all 0.4s ease;
-        }
-
-        body.menu-open {
-            padding: 50px;
         }
 
         /* Ẩn mũi tên trong Chrome, Edge, Safari */
@@ -53,6 +48,7 @@
         }
 
         #menu, #viewer {
+            display: none;
             background-color: white;
             border-radius: 20px;
             padding: 10px;
@@ -66,31 +62,38 @@
         #menu {
             visibility: visible;
             width: 300px;
+            flex-direction: column;
         }
         #viewer {
             flex: 3;
-            display: flex;
             gap: 10px;
             flex-direction: row;
             margin-bottom: 10px;
             background-color: white;
+            transition: all 0.4s ease; /* Thêm transition cho viewer */
+            position: relative; /* Để loading-overlay nằm trong viewer */
+        }
+
+        body.menu-open #viewer {
+            transform: scale(0.8);
+            border-radius: 20px;
         }
         #image {
             display: none;
             flex-direction: column;
             width: 100%;
             height: 100%;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            position: relative; /* Cần cho thanh điều khiển */
         }
         #video {
             display: none;
             width: 100%;
             height: 100%;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
         }
         .btn-menu {
-            display: flex;
             justify-content: center;
             align-items: center;
             position: absolute;
@@ -156,6 +159,7 @@
                 left: 0;
                 margin: 5px;
                 height: calc(100% - 10px);
+                
                 transform: translateX(-100%);
                 z-index: 999;
             }
@@ -173,9 +177,6 @@
             }
             #overlay.closing {
                 animation: overlay-off 0.4s ease forwards;
-            }
-            .btn-menu {
-                display: flex;
             }
         }
         @keyframes overlay-on {
@@ -195,6 +196,11 @@
             100% {transform: translateX(-100%);}
         }
         /* Bảng */
+        .file-table-container {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+        }
         .file-table {
             min-width: 150px;
             width: 100%;
@@ -211,11 +217,15 @@
             width: 100%;
         }
 
+        .file-table thead tr {
+            display: flex;
+            width: 100%;
+        }
+
         .file-table thead th {
             text-align: center;
             padding: 15px 10px;
-            display: inline-block;
-            width: 50%;
+            flex: 1; /* Chia đều không gian */
             box-sizing: border-box;
         }
 
@@ -229,15 +239,14 @@
             text-align: center;          /* căn giữa theo yêu cầu */
             padding: 15px 10px;
             vertical-align: middle;
-            display: inline-block;
-            width: 50%;
+            flex: 1; /* Chia đều không gian */
             box-sizing: border-box;
         }
 
         /* Tbody cuộn nhưng ẩn scrollbar */
         .file-table tbody {
             display: block;
-            max-height: calc(100vh - 280px);
+            height: 100%;
             overflow-y: auto;
             scrollbar-width: none; /* Firefox */
             width: 100%;
@@ -249,7 +258,7 @@
         /* Chỉ kẻ đường ngang giữa các hàng, màu đen mờ */
         .file-table tbody tr {
             border-bottom: 2px solid rgba(0,0,0,0.2);
-            display: block;
+            display: flex; /* Sử dụng flexbox cho hàng */
             width: 100%;
         }
         .file-table tbody tr:last-child {
@@ -300,6 +309,13 @@
             width: 30px;
             padding: 8px 8px;
             font-style: normal !important;
+            cursor: pointer;
+        }
+
+        #img-control i#zoom-default {
+            cursor: not-allowed;
+            pointer-events: none;
+            opacity: 0.5;
         }
 
         #img-control i input {
@@ -324,9 +340,8 @@
         #img-zoom {
             position: relative;
             text-align: center;
-            width: calc(100% - 20px);
             height: 100%;
-            margin: 10px;
+            width: 99%;
             border: 1px solid rgba(0, 0, 0, 0.3);
             border-radius: 20px;
             overflow: hidden; /* Ẩn phần tràn ra ngoài khi phóng to */
@@ -334,21 +349,19 @@
             touch-action: none;
         }
 
-        #img-zoom img{
-            width: auto;
-            height: auto;
-            border: none;
+        #img-view {
             position: absolute;
-            top: 0;
-            left: 0;
-            transform-origin: top left;
-            cursor: grab !important;
+            top: 50%;
+            left: 50%;
+            cursor: grab;
             user-select: none;
             -webkit-user-drag: none;
+            transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+            transform-origin: 50% 50%; /* Đặt gốc transform ở góc trên trái */
         }
 
-        #img-zoom img:active{
-            cursor: grabbing !important;
+        #img-view:active {
+            cursor: grabbing;
         }
 
         video, iframe {
@@ -358,28 +371,229 @@
             flex: 1;
             margin: 0;
         }
+
+        #home {
+            display: block;
+            min-width: fit-content;
+            width: fit-content;
+            height: fit-content;
+            padding: 5px;
+            text-align: center;
+            background-color: rgb(0, 115, 255);
+            color: white;
+            border-radius: 10px;
+            font-size: 20px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: auto; /* Đẩy nút này về bên trái */
+            flex-grow: 1; /* Cho phép nút này co giãn */
+        }
+
+        #home:hover {
+            background-color: rgb(0, 96, 214);
+        }
+
+        #select-location {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 20px;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .location-item {
+            background-color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            box-shadow: 5px 5px 12px rgba(0, 0, 0, 0.2);
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .location-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 5px 10px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Custom Video Controls */
+        .video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            padding: 5px 15px;
+            box-sizing: border-box;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+        }
+
+        #video:hover .video-controls {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .video-controls button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 5px;
+        }
+
+        .timeline-container {
+            flex: 1;
+            margin: 0 15px;
+            cursor: pointer;
+            height: 5px;
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .timeline-progress {
+            height: 100%;
+            width: 0;
+            background-color: #00a1ff;
+            position: relative;
+        }
+
+        .timeline-progress::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            background-color: white;
+            border-radius: 50%;
+        }
+
+        .time-display {
+            color: white;
+            font-size: 14px;
+            margin: 0 10px;
+        }
+
+        .volume-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .volume-container input[type="range"] {
+            width: 70px;
+        }
+
+        #home span { display: inline; }
+        #home i { display: none; }
+
+        @media (max-width: 750px) {
+            #home span { display: none; }
+            #home i { display: inline; }
+        }
+
+        .menu-controls {
+            display: flex;
+            justify-content: flex-end; /* Đẩy các item về bên phải */
+            align-items: center;
+            padding: 5px 5%;
+            gap: 10px;
+        }
+
+        #refresh {
+            display: block;
+            min-width: fit-content;
+            height: fit-content;
+            padding: 5px;
+            text-align: center;
+            background-color: rgb(0, 115, 255);
+            color: white;
+            border-radius: 10px;
+            font-size: 20px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #refresh:hover {
+            background-color: rgb(0, 96, 214);
+        }
+        
+        #video.hide-cursor {
+            cursor: none;
+        }
+
+        /* Loading Spinner */
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* Nằm trên media nhưng dưới menu */
+            border-radius: 20px;
+        }
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid rgb(0, 115, 255);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
+    <div id="select-location"></div>
     <div id="overlay"></div>
     <i class="fa fa-bars fa-2x btn-menu" aria-hidden="true"></i>
     <div id="menu">
         <h3 style="text-align: center;width: 100%;font-size: 30px; margin-top: 5px;margin-bottom: 5px;">FILE</h3>
-        <button style="display: block; min-width: fit-content; width: 90%; height: fit-content; padding: 5px; margin: 5px 5%; text-align: center; background-color: rgb(0, 115, 255); color: white; border-radius: 10px; font-size: 20px; border: none; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.backgroundColor='rgb(0, 96, 214)';" onmouseout="this.style.backgroundColor='rgb(0, 115, 255)';" id="refresh">
-            Làm mới các file
-        </button>
-        <table class="file-table" role="table" aria-label="Danh sách file">
-            <thead>
-                <tr>
-                    <th scope="col">Type</th>
-                    <th scope="col">File id</th>
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-        </table>
+        <div class="menu-controls">
+            <button id="home">
+                <i class="fa fa-home fa-x" aria-hidden="true"></i> <span>Trang chủ</span>
+            </button>
+            <button id="refresh">
+                Làm mới các file
+            </button>
+        </div>
+        <div class="file-table-container">
+            <table class="file-table" role="table" aria-label="Danh sách file">
+                <thead>
+                    <tr>
+                        <th scope="col">Type</th>
+                        <th scope="col">File id</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
     </div>
     <div id="viewer">
+        <div id="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+        </div>
         <div id="message" style="height: 100%;width: 100%; text-align: center;   display: flex;  align-items: center;  justify-content: center; font-size: 30px;">Chọn 1 file để xem.</div>
         <div id="image">
             <div id="img-zoom">
@@ -390,72 +604,298 @@
                 <i class="fa fa-search-minus fa-2x" title= "Zoom-out" id="zoom-out" aria-hidden="true"></i>
                 <i class="fa fa-compress fa-2x" title= "Zoom-default" id="zoom-default" aria-hidden="true"></i>
                 <i style="width: 125px;">
-                    <input type="number" id="image-size-text" min="10" max="10000" value="100">
+                    <input type="number" id="image-size-text" min="10" max="1000" value="100">
                     <span style="font-size: 30px; min-width: 35px; width: 35px;">%</span>
                 </i>
             </div>
         </div>
         <div id="video">
-            <video id="video-view" controls>
+            <!-- Double Buffering: Hai trình phát video để chuyển tiếp mượt mà -->
+            <video id="video-player-1" class="video-player" preload="auto" style="opacity: 1;">
                 <source src="" type="video/mp4">
             </video>
+            <video id="video-player-2" class="video-player" preload="auto" style="opacity: 0;">
+                <source src="" type="video/mp4">
+            </video>
+            <div class="video-controls">
+                <button id="play-pause-btn"><i class="fa fa-play"></i></button>
+                <div class="time-display">
+                    <span id="current-time">00:00</span> / <span id="total-time">00:00</span>
+                </div>
+                <div class="timeline-container">
+                    <div class="timeline-progress"></div>
+                </div>
+                <div class="volume-container">
+                    <button id="mute-btn"><i class="fa fa-volume-up"></i></button>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="1">
+                </div>
+                <button id="fullscreen-btn"><i class="fa fa-expand"></i></button>
+            </div>
         </div>
     </div>
-    <script src="https://unpkg.com/@panzoom/panzoom@4.6.0/dist/panzoom.min.js"></script>
     <script>
-        /* ===== DANH SÁCH FILE CẦN LOAD ===== */
-        const fileList = [
-            { name: '01', type: 'Image', path: './image/01.jpg' },
-            { name: '02', type: 'Image', path: './image/02.jpg' },
-            { name: '03', type: 'Image', path: './image/03.jpg' },
-            { name: '04', type: 'Image', path: './image/04.jpg' },
-            { name: '05', type: 'Image', path: './image/05.jpg' },
-            { name: '06', type: 'Image', path: './image/06.jpg' },
-            { name: '07', type: 'Image', path: './image/07.jpg' },
-            { name: '08', type: 'Image', path: './image/08.jpg' },
-            { name: '09', type: 'Image', path: './image/09.jpg' },
-            { name: '10', type: 'Image', path: './image/10.jpg' }
-        ];
+        let ALL_DATA = {};
+        /* ===== CSS cho Trình phát Video ===== */
+        const style = document.createElement('style');
+        style.textContent = `
+            .video-player {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                transition: none !important; /* Đảm bảo chuyển đổi tức thì */
+            }
+        `;
+        document.head.appendChild(style);
+        /* ===== Cấu hình và Trạng thái Trình phát Video ===== */
+        const videoPlayers = []; // Sẽ chứa 2 element <video>
+        let activePlayerIndex = 0; // 0 hoặc 1
+
+        // Hàm tiện ích để lấy trình phát đang hoạt động và trình phát ẩn
+        const getActivePlayer = () => videoPlayers[activePlayerIndex];
+        const getInactivePlayer = () => videoPlayers[1 - activePlayerIndex];
+
+        // Hàm hoán đổi trình phát
+        const swapPlayers = () => {
+            activePlayerIndex = 1 - activePlayerIndex;
+            const activePlayer = getActivePlayer();
+            const inactivePlayer = getInactivePlayer();
+            
+            activePlayer.style.opacity = 1;
+            inactivePlayer.style.opacity = 0;
+        };
+
+
+        let CURRENT_LOCATION_KEY = null;
+
+        let videoPlaylist = [];
+        let currentVideoIndex = 0;
+        let videoDurations = [];
+        let totalVideoDuration = 0;
+        let isHome = true;
+        let imageViewer = null;
+        let currentLoadId = 0;
+
+        /* ===== HÀM ĐIỀU KHIỂN LOADER ===== */
+        function showLoader() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+        function hideLoader() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+        function hideLoader(loadId) {
+            if (loadId === currentLoadId) { // Chỉ ẩn nếu đây là yêu cầu tải mới nhất
+                document.getElementById('loading-overlay').style.display = 'none';
+            }
+        }
+
+        function createLocationSelectionScreen(data) {
+            const selectLocationDiv = document.getElementById('select-location');
+            selectLocationDiv.innerHTML = '';
+
+            for (const key in data) {
+                const location = data[key];
+                const locationItem = document.createElement('div');
+                locationItem.className = 'location-item';
+                locationItem.textContent = location.name;
+                locationItem.setAttribute('data-location-key', key);
+
+                locationItem.addEventListener('click', () => {
+                    CURRENT_LOCATION_KEY = key;
+                    showMainUI();
+                    initializeFileTable(location.items, key);
+                });
+
+                selectLocationDiv.appendChild(locationItem);
+            }
+        }
+
+        /* ===== HÀM HIỂN THỊ/ẨN GIAO DIỆN ===== */
+        function showLocationSelection() {
+            isHome = true;
+            document.getElementById('select-location').style.display = 'flex';
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('viewer').style.display = 'none';
+            document.querySelector('.btn-menu').style.display = 'none';
+        }
+
+        function showMainUI() {
+            isHome = false;
+            document.getElementById('select-location').style.display = 'none';
+            document.getElementById('menu').style.display = 'flex'; // Ensure menu is a flex container
+            document.getElementById('viewer').style.display = 'flex';
+            const menu = document.getElementById('menu');
+
+            if (window.innerWidth <= 750) {
+                document.querySelector('.btn-menu').style.display = 'flex';
+                // On mobile, hide menu by default, let CSS handle active state
+                menu.style.visibility = 'hidden';
+                menu.style.transform = 'translateX(-100%)';
+            } else {
+                // On desktop, hide menu button and show menu
+                document.querySelector('.btn-menu').style.display = 'none';
+                menu.style.visibility = 'visible';
+                menu.style.transform = 'translateX(0)';
+            }
+        }
 
         /* ===== HÀM KHỞI TẠO BẢNG FILE TỰ ĐỘNG ===== */
-        function initializeFileTable(files) {
+        function initializeFileTable(items, locationKey) {
             const tbody = document.querySelector('.file-table tbody');
             tbody.innerHTML = ''; // Xóa các hàng cũ
             
-            files.forEach(file => {
+            items.forEach(itemArray => {
                 const row = document.createElement('tr');
                 row.className = 'btn-row';
                 row.setAttribute('tabindex', '0');
-                row.setAttribute('data-fileid', file.name);
-                row.setAttribute('data-type', file.type);
-                row.setAttribute('data-path', file.path);
+
+                const isVideo = itemArray.length > 1 || itemArray[0].endsWith('.mp4');
+                const type = isVideo ? 'Video' : 'Image';
+                const fileId = itemArray[0].split('.')[0];
+                // Đối với video, path sẽ là một chuỗi JSON của mảng các file
+                const path = isVideo ? JSON.stringify(itemArray.map(p => `data/${locationKey}/${p}`)) : `data/${locationKey}/${itemArray[0]}`;
+
+                row.setAttribute('data-fileid', fileId);
+                row.setAttribute('data-type', type);
+                row.setAttribute('data-path', path);
                 
                 row.innerHTML = `
-                    <td class="type">${file.type}</td>
-                    <td class="fileid">${file.name}</td>
+                    <td class="type">${type}</td>
+                    <td class="fileid">${fileId}</td>
                 `;
                 
                 tbody.appendChild(row);
             });
+
+            // Gắn lại sự kiện cho các hàng mới được tạo
+            attachRowClickEvents();
+        }
+
+        /* ===== HÀM RESET TRÌNH XEM ===== */
+        function resetViewer() {
+            // Vô hiệu hóa mọi yêu cầu tải đang chờ và ẩn loader ngay lập tức
+            currentLoadId++;
+            hideLoader(currentLoadId);
+
+            const ImageView = document.getElementById('image');
+            const VideoView = document.getElementById('video');
+            const messageView = document.getElementById('message');
+            const imgView = document.getElementById('img-view');
+
+            // Dừng và xóa video
+            videoPlayers.forEach(p => { p.pause(); p.removeAttribute('src'); p.load(); });
+            
+            // Xóa ảnh
+            imgView.src = '';
+
+            // Ẩn các trình xem media và hiện lại thông báo
+            ImageView.style.display = 'none';
+            VideoView.style.display = 'none';
+            messageView.style.display = 'flex';
+
+            // Reset trạng thái trình phát video
+            videoPlaylist = [];
+            currentVideoIndex = 0;
+            videoDurations = [];
+            totalVideoDuration = 0;
+
+            // Xóa hàng đang được chọn trong danh sách
+            const selectedRow = document.querySelector('.btn-row.selected');
+            if (selectedRow) selectedRow.classList.remove('selected');
+        }
+
+        /* ===== HÀM TÍNH TOÁN DURATION CHO VIDEO ===== */
+        async function calculateVideoDurations(paths) {
+            videoDurations = [];
+            totalVideoDuration = 0;
+            const durationPromises = paths.map(path => {
+                return new Promise((resolve) => {
+                    const tempVideo = document.createElement('video');
+                    tempVideo.preload = 'metadata'; // Chỉ tải metadata
+                    tempVideo.onloadedmetadata = () => {
+                        videoDurations.push(tempVideo.duration);
+                        totalVideoDuration += tempVideo.duration;
+                        resolve();
+                    };
+                    tempVideo.onerror = () => resolve(); // Bỏ qua lỗi và tiếp tục
+                    tempVideo.src = path;
+                });
+            });
+            await Promise.all(durationPromises);
+            document.getElementById('total-time').textContent = formatTime(totalVideoDuration);
+        }
+
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60);
+            return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
         }
 
         /* ===== HÀM LOAD MEDIA (ẢNH HOẶC VIDEO) ===== */
-        function loadMedia(type, path) {
+        async function loadMedia(type, path) {
             const ImageView = document.getElementById('image');
             const VideoView = document.getElementById('video');
+            const messageView = document.getElementById('message');
             const imgView = document.getElementById('img-view');
-            const videoView = document.getElementById('video-view');
             
+            // Tạo một ID duy nhất cho yêu cầu tải này
+            const loadId = ++currentLoadId;
+
+            showLoader();
+            messageView.style.display = 'none';
+
             if (type === 'Image') {
                 ImageView.style.display = 'flex';
                 VideoView.style.display = 'none';
+                getActivePlayer()?.pause(); // Dừng video nếu đang chạy
+                
+                // Gán sự kiện load một lần để gọi hideLoader với đúng loadId
+                imgView.onload = () => hideLoader(loadId);
+                imgView.onerror = () => hideLoader(loadId); // Ẩn loader nếu ảnh lỗi
+
                 imgView.src = path; // Tự động set src ảnh
                 document.getElementById('viewer').style.padding = '10px';
             } else if (type === 'Video') {
                 ImageView.style.display = 'none';
-                VideoView.style.display = 'flex';
-                videoView.querySelector('source').src = path; // Tự động set src video
-                videoView.load(); // Load lại video element
+                VideoView.style.display = 'block';
+                videoPlaylist = JSON.parse(path);
+                currentVideoIndex = 0;
+
+                // Reset timeline
+                document.querySelector('.timeline-progress').style.width = '0%';
+                document.getElementById('current-time').textContent = '00:00';
+                document.getElementById('total-time').textContent = '...'; // Hiển thị đang tải
+
+                // Tính tổng duration và bắt đầu phát
+                await calculateVideoDurations(videoPlaylist);
+
+                // Nếu người dùng đã chuyển sang file khác trong khi chờ, không tiếp tục
+                if (loadId !== currentLoadId) return;
+
+                // Reset giao diện player
+                videoPlayers[0].style.opacity = 1;
+                videoPlayers[1].style.opacity = 0;
+                activePlayerIndex = 0;
+                const activePlayer = getActivePlayer();
+
+                // Chỉ ẩn loader khi video đã sẵn sàng để phát
+                activePlayer.addEventListener('canplay', function onCanPlay() {
+                    hideLoader(loadId);
+                }, { once: true });
+
+                activePlayer.src = videoPlaylist[currentVideoIndex];
+                activePlayer.load();
+                activePlayer.play().catch(e => {
+                    // Bỏ qua lỗi AbortError vì đây là hành vi dự kiến khi người dùng click nhanh
+                    if (e.name !== 'AbortError') {
+                        console.error("Lỗi khi tự động phát:", e);
+                    }
+                });
+
+                // Tải trước phần tiếp theo nếu có
+                preloadNextSegment();
+
                 document.getElementById('viewer').style.padding = '0px';
             }
         }
@@ -464,47 +904,46 @@
         const overlay = document.getElementById('overlay');
         const btnMenu = document.querySelector('.btn-menu');
         
-        let btnRows = document.querySelectorAll('.btn-row');
-        const textid = document.getElementById('text-id'); 
-        
         const ImageView = document.getElementById('image');
+        const videoContainer = document.getElementById('video');
         const VideoView = document.getElementById('video');
-        const video = document.getElementById('video-view');
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            // Khởi tạo bảng file từ danh sách
-            initializeFileTable(fileList);
-            
-            // Cập nhật lại btnRows sau khi khởi tạo
-            btnRows = document.querySelectorAll('.btn-row');
-            // test thử
-            // textid.textContent = document.querySelector('.btn-row.selected').textContent;
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Khởi tạo các trình phát video
+                videoPlayers.push(document.getElementById('video-player-1'));
+                videoPlayers.push(document.getElementById('video-player-2'));
+                // Gắn sự kiện cho trình phát video tùy chỉnh
+                initializeVideoPlayer();
+
+                initializeImageViewer();
+
+                const response = await fetch('./data.json');
+                ALL_DATA = await response.json();
+                createLocationSelectionScreen(ALL_DATA);
+                showLocationSelection();
+            } catch (error) {
+                console.error("Không thể tải file data.json:", error);
+                let errorMessage = '<div class="location-item" style="background-color: #ffdddd; color: #d8000c; text-align: center; padding: 30px 50px; height: fit-content !important; width: fit-content !important; cursor: default; margin: auto; box-shadow: none; pointer-events: none;">';
+                errorMessage += '<h3 style="margin: auto;">Lỗi: Không tải được dữ liệu địa điểm.</h3>';
+                if (window.location.protocol === 'file:') {
+                    errorMessage += '<p>Trang web đang được mở trực tiếp từ file. Vui lòng chạy dự án qua một máy chủ web cục bộ để khắc phục.</p>';
+                }
+                errorMessage += '</div>';
+                document.body.style.background = '#ffdddd';
+                document.getElementById('select-location').innerHTML = errorMessage;
+            }
+
             btnLoad();
             document.getElementById('message').style.display = 'flex';
             ImageView.style.display = 'none';
             VideoView.style.display = 'none';
 
-            // Khi ảnh load thì set scale mặc định theo khung
-            const img = document.getElementById('img-view');
-            img.addEventListener('load', () => {
-                const imgW = img.naturalWidth;
-                const imgH = img.naturalHeight;
-                const frameW = img.parentElement.clientWidth;
-                const frameH = img.parentElement.clientHeight;
+        });
 
-                // tỉ lệ fit theo chiều dài hơn
-                const scaleFit = Math.min(frameW / imgW, frameH / imgH);
-
-                // set zoom Panzoom
-                panzoom.zoom(scaleFit, { animate: false });
-                // panzoom.pan(0, 0);
-
-                // cập nhật ô input % zoom = 100
-                lastValue = 100;
-                zoomInput.value = 100;
-
-                console.log("Ảnh fit vào khung với scale =", scaleFit);
-            });
+        document.getElementById('home').addEventListener('click', () => {
+            closeMenu(true); // Đóng menu ngay lập tức nếu đang mở
+            resetViewer();
+            showLocationSelection();
         });
 
         document.getElementById('refresh').addEventListener('click', () => {
@@ -512,12 +951,12 @@
                 closeMenu();
             }
             setTimeout(() => {
-                location.reload();
-            }, 450);
+                initializeFileTable(ALL_DATA[CURRENT_LOCATION_KEY].items, CURRENT_LOCATION_KEY);
+            }, 400);
         });
 
         function openMenu() {
-            menu.style.display = '';
+            menu.style.display = 'flex';
             document.body.classList.add('menu-open');
             menu.style.visibility = 'visible';
             menu.classList.add('active');
@@ -574,16 +1013,16 @@
                 closeMenu();
             }
             if(document.querySelector('.btn-row.selected .type').textContent === 'Video') {
-                document.getElementById('video-view').pause();
+                getActivePlayer()?.pause();
             }
         });
 
         document.body.addEventListener('click', (e) => {
             const selected = document.querySelector('.btn-row.selected .type');
-            if (selected && selected.textContent === 'Video') {
+            if (selected && selected.textContent === 'Video' && getActivePlayer()) {
                 // Chỉ pause nếu click KHÔNG nằm trên chính video
-                if (!video.contains(e.target)) {
-                    video.pause();
+                if (!videoContainer.contains(e.target)) {
+                    getActivePlayer().pause();
                 }
             }
         });
@@ -591,10 +1030,8 @@
         
         menu.addEventListener('click', (e) => {
             const selected = document.querySelector('.btn-row.selected .type');
-            if (selected && selected.textContent === 'Video') {
-                if (!video.contains(e.target)) {
-                    video.pause();
-                }
+            if (selected && selected.textContent === 'Video' && getActivePlayer()) {
+                getActivePlayer().pause();
             }
         });
 
@@ -606,135 +1043,448 @@
 
         // Xử lý khi resize màn hình
         window.addEventListener('resize', () => {
-
-            if (window.innerWidth > 750) {
-                menu.style.display = '';
-                // Xóa animation và class mobile
-                menu.classList.remove('active', 'closing');
-                overlay.classList.remove('active', 'closing');
-                btnMenu.classList.remove('active', 'fa-times');
-                btnMenu.classList.add('fa-bars');
-                
-                // Hiện menu cố định trên desktop
-                menu.style.visibility = 'visible';
-                menu.style.transform = 'translateX(0)';
-                
-                // Ẩn overlay vì desktop không cần
-                overlay.style.visibility = 'hidden';
-            } else {
-                if (menu.classList.contains('active')) {
-                    closeMenu();
-                }    
-                menu.style.display = 'none';
-                document.body.classList.remove('menu-open');
-                menu.classList.remove('active');
-                menu.style.visibility = 'hidden';
-                overlay.classList.remove('active');
-                btnMenu.classList.remove('active', 'fa-times');
-                btnMenu.classList.add('fa-bars');
-                document.body.style.padding = '10px';
-            }    
+            if (!isHome) {
+                if (window.innerWidth > 750) {
+                    menu.style.display = 'flex';
+                    // Xóa animation và class mobile
+                    menu.classList.remove('active', 'closing');
+                    overlay.classList.remove('active', 'closing');
+                    btnMenu.classList.remove('active', 'fa-times');
+                    document.body.classList.remove('menu-open'); // Xóa scale/padding khi về desktop
+                    btnMenu.classList.add('fa-bars');
+                    
+                    // Hiện menu cố định trên desktop
+                    menu.style.visibility = 'visible';
+                    menu.style.transform = 'translateX(0)';
+                    btnMenu.style.display = 'none';
+                    
+                    // Ẩn overlay vì desktop không cần
+                    overlay.style.visibility = 'hidden';
+                } else {
+                    // Trên mobile, nếu menu không active thì ẩn nó đi
+                    if (!menu.classList.contains('active')) {
+                        menu.style.visibility = 'hidden';
+                        menu.style.transform = 'translateX(-100%)';
+                    }
+                    btnMenu.style.display = 'flex';
+                    document.body.classList.remove('menu-open');
+                    btnMenu.classList.remove('active', 'fa-times');
+                    btnMenu.classList.add('fa-bars');
+                    
+                }
+            }
         });    
 
-        btnRows.forEach(row => {
-            btnLoad();
-            row.addEventListener('click', () => {
-                const currentSelected = document.querySelector('.btn-row.selected .type');
+        function attachRowClickEvents() {
+            const btnRows = document.querySelectorAll('.btn-row');
+            btnRows.forEach(row => {
+                btnLoad();
+                row.addEventListener('click', () => {
+                    const currentSelected = document.querySelector('.btn-row.selected');
 
-                // Nếu file hiện tại là Video thì pause trước khi chuyển
-                if (currentSelected && currentSelected.textContent === 'Video') {
+                    // Nếu file hiện tại là Video thì pause trước khi chuyển
+                    if (currentSelected && currentSelected.getAttribute('data-type') === 'Video') {
+                        getActivePlayer()?.pause();
+                    }
+
+                    // Xóa class selected ở tất cả các hàng
+                    btnRows.forEach(r => r.classList.remove('selected'));
+                    
+                    // Thêm class selected vào hàng được click
+                    row.classList.add('selected');
+                    
+                    // Lấy type và path từ data attributes
+                    const type = row.getAttribute('data-type');
+                    const path = row.getAttribute('data-path');
+                    
+                    // Load media tự động
+                    loadMedia(type, path);
+                    
+                    if (window.innerWidth < 750 && btnMenu.style.display !== 'none') {
+                        closeMenu();
+                    }
+                });
+            });
+        }
+
+        /* ==== Phần điều khiển Video tùy chỉnh ==== */
+        function initializeVideoPlayer() {
+            const videoControls = document.querySelector('.video-controls');
+            const playPauseBtn = document.getElementById('play-pause-btn');
+            const playPauseBtnIcon = playPauseBtn.querySelector('i');
+            const timelineContainer = document.querySelector('.timeline-container');
+            const volumeSlider = document.getElementById('volume-slider');
+            const muteBtn = document.getElementById('mute-btn');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            let idleTimer = null;
+
+            // Play/Pause
+            playPauseBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Ngăn sự kiện click lan ra timeline
+                const video = getActivePlayer();
+                if (video.paused) {
+                    video.play();
+                } else {
                     video.pause();
-                    video.currentTime = 0;
-                }
-
-                // Xóa class selected ở tất cả các hàng
-                btnRows.forEach(r => r.classList.remove('selected'));
-                
-                // Thêm class selected vào hàng được click
-                row.classList.add('selected');
-                
-                // Lấy type và path từ data attributes
-                const type = row.getAttribute('data-type');
-                const path = row.getAttribute('data-path');
-                
-                // Load media tự động
-                document.getElementById('message').style.display = 'none';
-                loadMedia(type, path);
-                
-                if (window.innerWidth < 750 & btnMenu.display !== 'none') {
-                    closeMenu();
                 }
             });
-        });
 
-        /* ==== Phần điều khiển ảnh ==== */
-        const imgZoom = document.getElementById('img-view');
-        const zoomInput = document.getElementById('image-size-text');
-
-        const panzoom = Panzoom(imgZoom, {
-            contain: 'outside',
-            maxScale: 100,
-            minScale: 0.001,
-            startScale: 1,
-            duration: 200
-        });
-
-        // Bật cuộn chuột để zoom
-        imgZoom.addEventListener('wheel',panzoom.zoomWithWheel);
-        imgZoom.addEventListener('wheel',() => {
-            zoomInput.value = Math.round(panzoom.getScale()*100);
-        });
-        let zoomLevel = 1;
-
-        // Zoom in
-        document.getElementById('zoom-in').addEventListener('click', () => {
-            if (zoomLevel < 100) {
-                panzoom.zoom(panzoom.getScale()+0.1,{animate: true});
-                zoomInput.value = Math.round(panzoom.getScale()*100);
+            // Tự động ẩn/hiện controls và con trỏ chuột
+            function showControlsAndCursor() {
+                videoControls.style.opacity = 1;
+                videoControls.style.visibility = 'visible';
+                videoContainer.classList.remove('hide-cursor');
+                clearTimeout(idleTimer);
             }
-        });
 
-        // Zoom out
-        document.getElementById('zoom-out').addEventListener('click', () => {
-            if (zoomLevel > 0.1) {
-                panzoom.zoom(panzoom.getScale()-0.1,{animate: true});
-                zoomInput.value = Math.round(panzoom.getScale()*100);
+            videoContainer.addEventListener('mousemove', () => {
+                showControlsAndCursor();
+                idleTimer = setTimeout(() => {
+                    videoControls.style.opacity = 0;
+                    videoControls.style.visibility = 'hidden';
+                    videoContainer.classList.add('hide-cursor');
+                }, 3000);
+            });
+
+            videoContainer.addEventListener('mouseleave', () => {
+                videoControls.style.opacity = 0;
+                videoControls.style.visibility = 'hidden';
+                clearTimeout(idleTimer);
+            });
+
+            videoControls.addEventListener('mouseenter', showControlsAndCursor);
+
+            // Tua video
+            timelineContainer.addEventListener('click', (e) => {
+                const rect = timelineContainer.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const percentage = clickX / rect.width;
+                const seekTime = totalVideoDuration * percentage;
+                
+                // Dừng trình phát hiện tại
+                getActivePlayer().pause();
+
+                let cumulativeDuration = 0;
+                for (let i = 0; i < videoDurations.length; i++) {
+                    if (seekTime < cumulativeDuration + videoDurations[i]) {
+                        currentVideoIndex = i;
+
+                        // Chuyển sang trình phát đang ẩn
+                        swapPlayers();
+                        const newActivePlayer = getActivePlayer();
+                        const oldPlayer = getInactivePlayer();
+
+                        // Đồng bộ trạng thái âm lượng trước khi phát
+                        newActivePlayer.muted = oldPlayer.muted;
+                        newActivePlayer.volume = oldPlayer.volume;
+
+                        // Cập nhật giao diện
+                        newActivePlayer.style.opacity = 1;
+                        oldPlayer.style.opacity = 0;
+
+                        // Tải và phát video mới
+                        newActivePlayer.src = videoPlaylist[i];
+                        newActivePlayer.currentTime = seekTime - cumulativeDuration;
+                        newActivePlayer.play();
+                        newActivePlayer.play().catch(e => console.error("Lỗi khi tua video:", e));
+
+                        // Tải trước phần tiếp theo
+                        preloadNextSegment();
+                        return;
+                    }
+                    cumulativeDuration += videoDurations[i];
+                }
+            });
+
+            // Gắn sự kiện cho cả 2 trình phát
+            videoPlayers.forEach((player, index) => {
+                player.addEventListener('play', () => {
+                    if (index === activePlayerIndex) playPauseBtnIcon.className = 'fa fa-pause';
+                });
+                player.addEventListener('pause', () => {
+                    if (index === activePlayerIndex) playPauseBtnIcon.className = 'fa fa-play';
+                });
+
+                player.addEventListener('timeupdate', () => {
+                    if (index !== activePlayerIndex) return; // Chỉ cập nhật cho trình phát đang hoạt động
+
+                    let durationPlayed = 0;
+                    if (videoDurations.length === 0) return;
+
+                    for (let i = 0; i < currentVideoIndex; i++) {
+                        durationPlayed += videoDurations[i];
+                    }
+                    const totalCurrentTime = durationPlayed + player.currentTime;
+                    document.getElementById('current-time').textContent = formatTime(totalCurrentTime);
+
+                    const progressPercent = (totalCurrentTime / totalVideoDuration) * 100;
+                    document.querySelector('.timeline-progress').style.width = `${Math.min(100, progressPercent)}%`;
+                });
+                
+                // Logic chuyển tiếp video mượt mà
+                player.addEventListener('timeupdate', () => {
+                    if (index !== activePlayerIndex) return;
+                    if (player.duration && player.currentTime > player.duration - 0.25) {
+                        handleSeamlessTransition();
+                    }
+                });
+
+                player.addEventListener('ended', () => {
+                    if (index !== activePlayerIndex) return; // Chỉ xử lý khi trình phát đang hoạt động kết thúc
+
+                    if (currentVideoIndex < videoPlaylist.length - 1) {
+                        // Chuyển sang trình phát đã được tải trước
+                        swapPlayers();
+                        const newActivePlayer = getActivePlayer();
+                        const oldPlayer = getInactivePlayer();
+
+                        newActivePlayer.play();
+                        newActivePlayer.style.opacity = 1;
+                        oldPlayer.style.opacity = 0;
+
+                        currentVideoIndex++;
+                        preloadNextSegment(); // Tải trước phần tiếp theo cho trình phát vừa ẩn đi
+                    } else {
+                        // Hết playlist
+                        playPauseBtnIcon.className = 'fa fa-play';
+                        currentVideoIndex = 0; // Reset để có thể phát lại từ đầu
+                    }
+                });
+
+                // Âm lượng
+                volumeSlider.addEventListener('click', e => e.stopPropagation());
+                volumeSlider.addEventListener('input', e => {
+                    // Đồng bộ âm lượng cho cả 2 trình phát
+                    videoPlayers.forEach(p => p.volume = e.target.value);
+                    videoPlayers.forEach(p => p.muted = e.target.value == 0);
+                });
+                muteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const newMutedState = !getActivePlayer().muted;
+                    // Đồng bộ trạng thái tắt tiếng cho cả 2 trình phát
+                    videoPlayers.forEach(p => p.muted = newMutedState);
+                });
+                player.addEventListener('volumechange', () => {
+                    // Cập nhật icon dựa trên trình phát đang hoạt động
+                    const muteBtnIcon = muteBtn.querySelector('i');
+                    muteBtnIcon.className = player.muted || player.volume === 0 ? 'fa fa-volume-off' : 'fa fa-volume-up';
+                });
+
+                // Toàn màn hình
+                fullscreenBtn.addEventListener('click', (e) => { e.stopPropagation(); videoContainer.requestFullscreen().catch(err => console.error(err)) });
+            });
+        }
+
+        function preloadNextSegment() {
+            const nextIndex = currentVideoIndex + 1;
+            if (nextIndex < videoPlaylist.length) {
+                const inactivePlayer = getInactivePlayer();
+                inactivePlayer.muted = true; // Luôn tắt tiếng trình phát ẩn
+                inactivePlayer.src = videoPlaylist[nextIndex];
+                inactivePlayer.load();
             }
-        });
+        }
 
-        // Zoom default
-        document.getElementById('zoom-default').addEventListener('click', () => {
-            panzoom.zoom(panzoom.getScale()-(panzoom.getScale()-1),{animate: true});
-            zoomInput.value = Math.round(panzoom.getScale()*100);
-        });
+        /* ==== Phần điều khiển ảnh tùy chỉnh ==== */
+        function initializeImageViewer() {
+            const imgView = document.getElementById('img-view');
+            const imgContainer = document.getElementById('img-zoom');
+            const zoomInput = document.getElementById('image-size-text');
 
-        // Nhập % zoom
-        let lastValue = 100;
-        zoomInput.value = lastValue;
+            let scale = 1, baseScale = 1;
+            let translateX = 0, translateY = 0;
+            let isDragging = false;
+            let startX, startY, startTranslateX, startTranslateY;
 
-        zoomInput.addEventListener('blur', () => {
-            let value = Number(zoomInput.value); // ép sang số
-            if (zoomInput.value === "" || value < 10 || value > 10000 || isNaN(value)) {
-                // Nếu ngoài khoảng → quay lại giá trị cũ
-                zoomInput.value = lastValue;
-                panzoom.zoom(lastValue / 100);
-            } else {
-                // Nếu hợp lệ → lưu lại để làm giá trị cũ khi sai
-                lastValue = value;
-                panzoom.zoom(value / 100);
+            function applyTransform() {
+                // Luôn áp dụng translate(-50%, -50%) để căn giữa, sau đó mới áp dụng các transform khác
+                imgView.style.transform = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${scale})`;
             }
-        });
-        zoomInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") {
-                zoomInput.blur();
+
+            function adjustBounds() {
+                const containerRect = imgContainer.getBoundingClientRect();
+                const currentWidth = imgView.naturalWidth * scale;
+                const currentHeight = imgView.naturalHeight * scale;
+                
+                // Tính toán khoảng trống có thể di chuyển
+                const xBound = Math.max(0, (currentWidth - containerRect.width) / 2);
+                const yBound = Math.max(0, (currentHeight - containerRect.height) / 2);
+
+                // "Kẹp" (clamp) giá trị translate
+                translateX = Math.max(-xBound, Math.min(xBound, translateX));
+                translateY = Math.max(-yBound, Math.min(yBound, translateY));
+
+                applyTransform();
             }
-        });
-        // Nghe khi kéo (drag)
-        setInterval(() => {
-            console.clear(); // cho dễ nhìn
-            console.log('Vị trí:', panzoom.getPan());
-            console.log('Scale:', panzoom.getScale());
-        }, 200);
+
+            function updateZoom(newScale, pivotX, pivotY) {
+                const rect = imgContainer.getBoundingClientRect();
+                const oldScale = scale;
+                scale = Math.max(baseScale * 0.1, Math.min(newScale, baseScale * 10)); // Giới hạn zoom 10% - 1000%
+                
+                // Tính toán vị trí pivot tương đối so với tâm của container
+                const pivotPointX = pivotX - rect.left - rect.width / 2;
+                const pivotPointY = pivotY - rect.top - rect.height / 2;
+
+                // Tính toán sự thay đổi vị trí dựa trên điểm pivot
+                const scaleRatio = scale / oldScale;
+                translateX = (translateX - pivotPointX) * scaleRatio + pivotPointX;
+                translateY = (translateY - pivotPointY) * scaleRatio + pivotPointY;
+
+                applyTransform();
+                adjustBounds();
+                zoomInput.value = Math.round((scale / baseScale) * 100);
+
+                const zoomIn = document.getElementById('zoom-in');
+                const zoomOut = document.getElementById('zoom-out');
+                const zoomDefault = document.getElementById('zoom-default');
+                const zoomInputValue = parseInt(zoomInput.value, 10);
+                function toggleElementState(element, isDisabled) {
+                    element.style.opacity = isDisabled ? 0.5 : 1;
+                    element.style.cursor = isDisabled ? 'not-allowed' : 'pointer';
+                    element.style.pointerEvents = isDisabled ? 'none' : 'auto';
+                }
+                toggleElementState(zoomOut, zoomInputValue === 10);
+                toggleElementState(zoomDefault, zoomInputValue === 100);
+                toggleElementState(zoomIn, zoomInputValue === 1000);
+            }
+
+            function resetAndRecalculateLayout() {
+                if (!imgView.src) return;
+                const containerRect = imgContainer.getBoundingClientRect();
+                baseScale = Math.min(containerRect.width / imgView.naturalWidth, containerRect.height / imgView.naturalHeight);
+                scale = baseScale;
+                translateX = 0;
+                translateY = 0;
+                applyTransform();
+                zoomInput.value = 100;
+            }
+
+            imgView.addEventListener('load', resetAndRecalculateLayout);
+            window.addEventListener('resize', resetAndRecalculateLayout);
+
+            // Kéo thả
+            imgContainer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startTranslateX = translateX;
+                startTranslateY = translateY;
+                imgView.style.transition = 'none';
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                translateX = startTranslateX + (e.clientX - startX);
+                translateY = startTranslateY + (e.clientY - startY);
+                applyTransform();
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                imgView.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                adjustBounds();
+            });
+
+            // Zoom bằng chuột
+            imgContainer.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                updateZoom(scale * delta, e.clientX, e.clientY);
+            });
+
+            // Điều khiển bằng nút
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                const rect = imgContainer.getBoundingClientRect();
+                updateZoom(scale * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+            });
+
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                const rect = imgContainer.getBoundingClientRect();
+                updateZoom(scale / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
+            });
+
+            document.getElementById('zoom-default').addEventListener('click', () => {
+                const rect = imgContainer.getBoundingClientRect();
+                updateZoom(baseScale, rect.left + rect.width / 2, rect.top + rect.height / 2);
+            });
+
+            // Nhập liệu
+            zoomInput.addEventListener('change', () => {
+                let percent = parseInt(zoomInput.value, 10);
+                if (isNaN(percent) || percent < 10) percent = 10; // Giới hạn dưới 10%
+                if (percent > 1000) percent = 1000; // Giới hạn trên 1000%
+                const newScale = (percent / 100) * baseScale;
+                const rect = imgContainer.getBoundingClientRect();
+                updateZoom(newScale, rect.left + rect.width / 2, rect.top + rect.height / 2);
+            });
+
+            // Cảm ứng
+            let initialDistance = null;
+            let initialScale = null;
+
+            imgContainer.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    initialDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    initialScale = scale;
+                }
+            });
+
+            imgContainer.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const newDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    const factor = newDistance / initialDistance;
+                    const newScale = initialScale * factor;
+
+                    const centerX = (e.touches[0].pageX + e.touches[1].pageX) / 2;
+                    const centerY = (e.touches[0].pageY + e.touches[1].pageY) / 2;
+
+                    updateZoom(newScale, centerX, centerY);
+                }
+            });
+
+            imgContainer.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) {
+                    initialDistance = null;
+                    initialScale = null;
+                }
+            });
+        }
+
+        function handleSeamlessTransition() {
+            // Chỉ thực hiện chuyển đổi nếu không phải là video cuối cùng
+            if (currentVideoIndex < videoPlaylist.length - 1) {
+                const oldPlayer = getActivePlayer();
+                
+                // Hoán đổi trình phát và cập nhật giao diện
+                swapPlayers();
+                currentVideoIndex++;
+
+                const newActivePlayer = getActivePlayer();
+
+                // Đồng bộ trạng thái âm lượng và bật tiếng trình phát mới
+                newActivePlayer.muted = oldPlayer.muted;
+                newActivePlayer.volume = oldPlayer.volume;
+
+                // Bắt đầu phát trình phát mới (đã được tải trước)
+                newActivePlayer.play().catch(e => console.error("Lỗi chuyển tiếp:", e));
+
+                // Cập nhật giao diện ngay lập tức
+                newActivePlayer.style.opacity = 1;
+                oldPlayer.style.opacity = 0;
+
+                // Dừng và reset trình phát cũ sau một khoảng trễ ngắn
+                setTimeout(() => {
+                    oldPlayer.pause();
+                }, 100);
+
+                preloadNextSegment(); // Tải trước phần tiếp theo cho trình phát vừa ẩn đi
+            }
+        }
     </script>
 </body>
 </html>
