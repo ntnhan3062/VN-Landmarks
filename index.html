@@ -23,8 +23,8 @@
         }
         
         body {
-            min-width: 320px;
-            min-height: 570px;
+            min-width: 300px;
+            min-height: 500px;
             background-color: #eee;
             display: flex;
             flex-direction: row;
@@ -54,8 +54,8 @@
             padding: 10px;
             box-sizing: border-box;
             height: 100%;
-            min-height: 570px;
-            min-width: 300px;
+            min-height: 480px;
+            min-width: 280px;
             margin: 0;
             box-shadow: 5px 5px 12px rgba(0, 0, 0, 0.3);
         }
@@ -76,8 +76,9 @@
 
         body.menu-open #viewer {
             transform: scale(0.8);
-            border-radius: 20px;
+            border-radius: 30px;
         }
+
         #image {
             display: none;
             flex-direction: column;
@@ -131,16 +132,10 @@
             z-index: 100;
         }
 
-        @media (max-width: 320px), (max-height: 570px) {
+        @media (max-width: 300px), (max-height: 500px) {
             html {
                 overflow: auto; /* Cho phép cuộn */
                 -webkit-overflow-scrolling: touch;
-            }
-            body{
-                padding-bottom: 0px;
-            }
-            #viewer{
-                margin-bottom: 10px;
             }
         }
         @media (max-width: 330px) {
@@ -703,6 +698,11 @@
 
                 locationItem.addEventListener('click', () => {
                     CURRENT_LOCATION_KEY = key;
+                    // Cập nhật URL với tham số location
+                    const url = new URL(window.location);
+                    url.searchParams.set('location', key);
+                    window.history.pushState({ path: url.href }, '', url.href);
+
                     showMainUI();
                     initializeFileTable(location.items, key);
                 });
@@ -919,14 +919,27 @@
 
                 const response = await fetch('./data.json');
                 ALL_DATA = await response.json();
-                createLocationSelectionScreen(ALL_DATA);
-                showLocationSelection();
+                // Luôn tạo màn hình chọn địa điểm để sẵn sàng khi người dùng bấm "Trang chủ"
+                createLocationSelectionScreen(ALL_DATA); 
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const locationKeyFromUrl = urlParams.get('location');
+
+                // Kiểm tra nếu có tham số location hợp lệ trong URL
+                if (locationKeyFromUrl && ALL_DATA[locationKeyFromUrl]) {
+                    CURRENT_LOCATION_KEY = locationKeyFromUrl;
+                    showMainUI();
+                    initializeFileTable(ALL_DATA[locationKeyFromUrl].items, locationKeyFromUrl);
+                } else {
+                    // Nếu không, hiển thị màn hình chọn địa điểm
+                    showLocationSelection();
+                }
             } catch (error) {
                 console.error("Không thể tải file data.json:", error);
-                let errorMessage = '<div class="location-item" style="background-color: #ffdddd; color: #d8000c; text-align: center; padding: 30px 50px; height: fit-content !important; width: fit-content !important; cursor: default; margin: auto; box-shadow: none; pointer-events: none;">';
+                let errorMessage = '<div class="location-item" style="background-color: #ffdddd; color: #d8000c; text-align: left; padding: 20px;">';
                 errorMessage += '<h3 style="margin: auto;">Lỗi: Không tải được dữ liệu địa điểm.</h3>';
                 if (window.location.protocol === 'file:') {
-                    errorMessage += '<p>Trang web đang được mở trực tiếp từ file. Vui lòng chạy dự án qua một máy chủ web cục bộ để khắc phục.</p>';
+                    errorMessage += '<p>Trang web đang được mở trực tiếp từ file. Vui lòng chạy dự án qua một máy chủ web cục bộ (ví dụ: "Live Server" trong VS Code) để khắc phục.</p>';
                 }
                 errorMessage += '</div>';
                 document.body.style.background = '#ffdddd';
@@ -943,6 +956,12 @@
         document.getElementById('home').addEventListener('click', () => {
             closeMenu(true); // Đóng menu ngay lập tức nếu đang mở
             resetViewer();
+
+            // Xóa tham số location khỏi URL
+            const url = new URL(window.location);
+            url.searchParams.delete('location');
+            window.history.pushState({ path: url.href }, '', url.href);
+
             showLocationSelection();
         });
 
@@ -1245,10 +1264,17 @@
                         currentVideoIndex++;
                         preloadNextSegment(); // Tải trước phần tiếp theo cho trình phát vừa ẩn đi
                     } else {
+                    // Khi video cuối cùng kết thúc (không được xử lý bởi handleSeamlessTransition)
+                    if (currentVideoIndex === videoPlaylist.length - 1) {
                         // Hết playlist
                         playPauseBtnIcon.className = 'fa fa-play';
                         currentVideoIndex = 0; // Reset để có thể phát lại từ đầu
+                        // Tải lại video đầu tiên để sẵn sàng cho lần phát tiếp theo
+                        const activePlayer = getActivePlayer();
+                        activePlayer.src = videoPlaylist[0];
+                        activePlayer.load();
                     }
+                };
                 });
 
                 // Âm lượng
@@ -1268,6 +1294,15 @@
                     // Cập nhật icon dựa trên trình phát đang hoạt động
                     const muteBtnIcon = muteBtn.querySelector('i');
                     muteBtnIcon.className = player.muted || player.volume === 0 ? 'fa fa-volume-off' : 'fa fa-volume-up';
+                });
+
+                // Hiển thị loading khi video bị dừng để buffer
+                player.addEventListener('waiting', () => {
+                    if (index === activePlayerIndex) showLoader();
+                });
+                player.addEventListener('playing', () => {
+                    // Sử dụng currentLoadId để tránh ẩn loader của file khác
+                    hideLoader(currentLoadId);
                 });
 
                 // Toàn màn hình
@@ -1452,6 +1487,18 @@
                     initialDistance = null;
                     initialScale = null;
                 }
+                // Xử lý khi kết thúc kéo 1 ngón
+                if (e.touches.length < 1) {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    imgView.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                    adjustBounds();
+                }
+            });
+
+            // Ngăn menu context khi giữ lâu trên mobile
+            imgContainer.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
             });
         }
 
