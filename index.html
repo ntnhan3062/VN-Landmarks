@@ -12,7 +12,7 @@
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
-
+            font-family: 'Segoe UI', Tahoma, sans-serif;
         }
         html, body {
             overflow: hidden;
@@ -309,17 +309,24 @@
             touch-action: none;
         }
         #img-view {
-            position: absolute;
-            top: 50%;
-            left: 50%;
             cursor: grab;
             user-select: none;
             -webkit-user-drag: none;
             transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
             transform-origin: 50% 50%;
         }
+        #img-view, #svg-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: 50% 50%;
+            transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
         #img-view:active {
             cursor: grabbing;
+        }
+        #svg-container svg {
+            pointer-events: all;
         }
         video, iframe {
             border-radius: 20px;
@@ -509,6 +516,36 @@
             z-index: 1000;
             border-radius: 20px;
         }
+        #svg-tooltip {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: fit-content;
+            min-width: 100px;
+            max-width: 350px;
+            height: fit-content;
+            min-height: 25px;
+            background: rgba(0, 0, 0, 0.8);
+            transition: opacity .25s ease;
+            color: white;
+            font-size: 16px;
+            border-radius: 5px;
+            padding: 5px;
+            z-index: 10;
+            opacity: 0;
+            display: none;
+            align-items: center;
+            pointer-events: none;
+            white-space: pre-line;
+        }
+        svg .object {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            stroke-linejoin: round;
+        }
+        svg {
+            pointer-events: none;
+        }
         .spinner {
             border: 8px solid #f3f3f3;
             border-top: 8px solid rgb(0, 115, 255);
@@ -527,11 +564,11 @@
     <div id="select-location"></div><div id="overlay"></div>
     <i class="fa fa-bars fa-2x btn-menu" aria-hidden="true"></i>
     <div id="menu"><h3 style="text-align: center;width: 100%;font-size: 30px; margin-top: 5px;margin-bottom: 5px;">FILE</h3><div class="menu-controls"><button id="home"><i class="fa fa-home fa-x" aria-hidden="true"></i> <span>Trang chủ</span></button><button id="refresh">Làm mới các file</button></div><div class="file-table-container"><table class="file-table" role="table" aria-label="Danh sách file"><thead><tr><th scope="col">Type</th><th scope="col">File id</th></tr></thead><tbody></tbody></table></div></div>
-    <div id="viewer">
+    <div id="viewer"><div id="svg-tooltip"></div>
         <div id="loading-overlay" style="display: none;"><div class="spinner"></div></div>
         <div id="message" style="height: 100%;width: 100%; text-align: center;   display: flex;  align-items: center;  justify-content: center; font-size: 30px;">Chọn 1 file để xem.</div>
-        <div id="image">
-            <div id="img-zoom"><img id="img-view"></div>
+        <div id="image" style="display: none;">
+            <div id="img-zoom"><img id="img-view"><div id="svg-container"></div></div>
             <div id="img-control"><i class="fa fa-search-plus fa-2x" title= "Phóng to" id="zoom-in" aria-hidden="true"></i><i class="fa fa-search-minus fa-2x" title= "Thu nhỏ" id="zoom-out" aria-hidden="true"></i><i class="fa fa-search fa-2x" title= "Phóng cho vừa" id="zoom-default" aria-hidden="true"></i><i style="width: 125px;"><input type="number" id="image-size-text" min="10" max="1000" value="100"><span style="font-size: 30px; min-width: 35px; width: 35px;">%</span></i></div>
         </div>
         <div id="video">
@@ -632,10 +669,14 @@
                 const row = document.createElement('tr');
                 row.className = 'btn-row';
                 row.setAttribute('tabindex', '0');
-                const isVideo = itemArray.length > 1 || itemArray[0].endsWith('.mp4');
-                const type = isVideo ? 'Video' : 'Image';
+                let type;
+                const fileName = itemArray[0].toLowerCase();
+                if (itemArray.length > 1 || fileName.endsWith('.mp4')) {type = 'Video'}
+                else if (fileName.endsWith('.svg')) {type = 'S-Image'}
+                else if (fileName.endsWith('.jpg') || fileName.endsWith('.png')) {type = 'Image'}
+                else {type = 'Unknown'}
                 const fileId = itemArray[0].split('.')[0];
-                const path = isVideo ? JSON.stringify(itemArray.map(p => `data/${locationKey}/${p}`)) : `data/${locationKey}/${itemArray[0]}`;
+                const path = type === 'Video' ? JSON.stringify(itemArray.map(p => `data/${locationKey}/${p}`)) : `data/${locationKey}/${itemArray[0]}`;
                 row.setAttribute('data-fileid', fileId);
                 row.setAttribute('data-type', type);
                 row.setAttribute('data-path', path);
@@ -651,6 +692,7 @@
             const VideoView = document.getElementById('video');
             const messageView = document.getElementById('message');
             const imgView = document.getElementById('img-view');
+            document.getElementById('svg-container').innerHTML = '';
             videoPlayers.forEach(p => { p.pause(); p.removeAttribute('src'); p.load(); });
             imgView.removeAttribute('src');
             ImageView.style.display = 'none';
@@ -663,13 +705,89 @@
             const selectedRow = document.querySelector('.btn-row.selected');
             if (selectedRow) selectedRow.classList.remove('selected');
         }
+        function setupSvgTooltips() {
+            const tooltip = document.getElementById('svg-tooltip');
+            const objects = document.querySelectorAll('#svg-container .object');
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            let activeTooltip = { element: null, timer: null };
+            objects.forEach(obj => {
+                const titleText = obj.dataset.title;
+                if (!titleText) return;
+                if (isTouchDevice) {
+                    obj.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (activeTooltip.element === obj) {
+                            clearTimeout(activeTooltip.timer);
+                            tooltip.style.display = 'none';
+                            setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                            activeTooltip.element = null;
+                            return;
+                        }
+                        clearTimeout(activeTooltip.timer);
+                        const rect = obj.getBoundingClientRect();
+                        tooltip.textContent = titleText;
+                        tooltip.style.display = 'flex';
+                        setTimeout(() => {tooltip.style.opacity = '1'}, 10);
+                        tooltip.style.left = `${rect.left + rect.width / 2}px`;
+                        tooltip.style.top = `${rect.top + rect.height / 2}px`;
+                        tooltip.style.transform = 'translate(-50%, -50%)';
+                        activeTooltip.element = obj;
+                        activeTooltip.timer = setTimeout(() => {
+                            tooltip.style.display = 'none';
+                            setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                            activeTooltip.element = null;
+                        }, 3000);
+                    });
+                } else {
+                    obj.addEventListener('mouseover', () => {
+                        tooltip.textContent = titleText;
+                        tooltip.style.display = 'flex';
+                        setTimeout(() => {tooltip.style.opacity = '1'}, 10);
+                        obj.style.stroke = 'rgba(0, 148, 255, 1)';
+                        obj.style.strokeWidth = '10px';
+                    });
+                    obj.addEventListener('mousemove', (e) => {
+                        const viewer = document.getElementById('viewer');
+                        const viewerRect = viewer.getBoundingClientRect();
+                        const maxTooltipWidth = Math.min(350, viewerRect.width);
+                        tooltip.style.maxWidth = `${maxTooltipWidth}px`;
+                        const tooltipWidth = tooltip.offsetWidth;
+                        const tooltipHeight = tooltip.offsetHeight;
+                        let targetLeft = e.clientX - viewerRect.left - (tooltipWidth / 2);
+                        let targetTop = e.clientY - viewerRect.top - tooltipHeight - 15;
+                        if (targetLeft < 0) targetLeft = 0;
+                        if (targetLeft + tooltipWidth > viewerRect.width) targetLeft = viewerRect.width - tooltipWidth;
+                        if (targetTop < 0) targetTop = e.clientY - viewerRect.top + 30;
+                        if (targetTop + tooltipHeight > viewerRect.height) targetTop = viewerRect.height - tooltipHeight;
+                        tooltip.style.left = `${targetLeft}px`;
+                        tooltip.style.top = `${targetTop}px`;
+                        tooltip.style.transform = 'none';
+                    });
+                    obj.addEventListener('mouseout', () => {
+                        tooltip.style.display = 'none';
+                        setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                        obj.style.stroke = 'rgba(0, 148, 255, 0.1)';
+                        obj.style.strokeWidth = '2px';
+                    });
+                }
+            });
+            tooltip.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (isTouchDevice && activeTooltip.element) {
+                    clearTimeout(activeTooltip.timer);
+                    tooltip.style.display = 'none';
+                    setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                    activeTooltip.element = null;
+                }
+            });
+        }
         async function calculateVideoDurations(paths) {
             videoDurations = [];
             totalVideoDuration = 0;
             const durationPromises = paths.map(path => {
                 return new Promise((resolve) => {
                     const tempVideo = document.createElement('video');
-                    tempVideo.preload = 'metadata'; // Chỉ tải metadata
+                    tempVideo.preload = 'metadata';
                     tempVideo.onloadedmetadata = () => {
                         videoDurations.push(tempVideo.duration);
                         totalVideoDuration += tempVideo.duration;
@@ -692,6 +810,8 @@
             const VideoView = document.getElementById('video');
             const messageView = document.getElementById('message');
             const imgView = document.getElementById('img-view');
+            const svgContainer = document.getElementById('svg-container');
+            const tooltip = document.getElementById('svg-tooltip');
             const loadId = ++currentLoadId;
             showLoader();
             messageView.style.display = 'none';
@@ -699,9 +819,55 @@
                 ImageView.style.display = 'flex';
                 VideoView.style.display = 'none';
                 getActivePlayer()?.pause();
-                imgView.onload = () => hideLoader(loadId);
-                imgView.onerror = () => hideLoader(loadId);
+                imgView.style.display = 'none';
+                svgContainer.style.display = 'none';
+                svgContainer.innerHTML = '';
+                tooltip.style.display = 'none';
+                setTimeout(() => {tooltip.style.opacity = '0'}, 10);
                 imgView.src = path;
+                document.getElementById('viewer').style.padding = '10px';
+            } else if (type === 'S-Image') {
+                ImageView.style.display = 'flex';
+                VideoView.style.display = 'none';
+                getActivePlayer()?.pause();
+                imgView.style.display = 'none';
+                svgContainer.style.display = 'none';
+                svgContainer.innerHTML = '';
+                tooltip.style.display = 'none';
+                setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                fetch(path)
+                    .then(response => response.text())
+                    .then(svgData => {
+                        if (loadId !== currentLoadId) return;
+                        const parser = new DOMParser();
+                        const svgDoc = parser.parseFromString(svgData, "image/svg+xml");
+                        const imageTag = svgDoc.querySelector('image');
+                        const originalSvg = svgDoc.querySelector('svg');
+                        if (imageTag && originalSvg) {
+                            const imageUrl = imageTag.getAttribute('href');
+                            imgView.src = imageUrl;
+                            imgView.style.display = 'block';
+                            const overlaySvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                            overlaySvg.setAttribute('viewBox', originalSvg.getAttribute('viewBox'));
+                            svgDoc.querySelectorAll('.object').forEach(obj => {
+                                const clonedObj = obj.cloneNode(true);
+                                const titleElement = clonedObj.querySelector('title');
+                                if (titleElement) {
+                                    clonedObj.dataset.title = titleElement.textContent;
+                                    titleElement.remove();
+                                }
+                                clonedObj.style.fill = 'transparent';
+                                clonedObj.style.stroke = 'rgba(0, 148, 255, 0.1)';
+                                clonedObj.style.strokeWidth = '2px';
+                                overlaySvg.appendChild(clonedObj);
+                            });
+                            svgContainer.innerHTML = '';
+                            svgContainer.appendChild(overlaySvg);
+                            svgContainer.style.display = 'block';
+                            setupSvgTooltips();
+                        }
+                    })
+                    .catch(err => {console.error('Error loading SVG:', err); hideLoader(loadId)});
                 document.getElementById('viewer').style.padding = '10px';
             } else if (type === 'Video') {
                 ImageView.style.display = 'none';
@@ -717,16 +883,10 @@
                 videoPlayers[1].style.opacity = 0;
                 activePlayerIndex = 0;
                 const activePlayer = getActivePlayer();
-                activePlayer.addEventListener('canplay', function onCanPlay() {
-                    hideLoader(loadId);
-                }, { once: true });
+                activePlayer.addEventListener('canplay', function onCanPlay() {hideLoader(loadId)}, { once: true });
                 activePlayer.src = videoPlaylist[currentVideoIndex];
                 activePlayer.load();
-                activePlayer.play().catch(e => {
-                    if (e.name !== 'AbortError') {
-                        console.error("Lỗi khi tự động phát:", e);
-                    }
-                });
+                activePlayer.play().catch(e => {if (e.name !== 'AbortError') {console.error("Lỗi khi tự động phát:", e)}});
                 preloadNextSegment();
                 document.getElementById('viewer').style.padding = '0px';
             }
@@ -799,6 +959,9 @@
             }, 200);
         }    
         function closeMenu(instant = false) {
+            const menu = document.getElementById('menu');
+            const overlay = document.getElementById('overlay');
+            const btnMenu = document.querySelector('.btn-menu');
             document.body.classList.remove('menu-open');
             menu.classList.add('closing');
             menu.classList.remove('active');
@@ -822,7 +985,8 @@
         setInterval(() => {btnLoad()}, 5000);
         btnMenu.addEventListener('click', () => {
             if (!menu.classList.contains('active')) {openMenu()} else {closeMenu()}
-            if(document.querySelector('.btn-row.selected .type').textContent === 'Video') {getActivePlayer()?.pause()}
+            const selectedType = document.querySelector('.btn-row.selected .type');
+            if(selectedType && selectedType.textContent === 'Video') {getActivePlayer()?.pause()}
         });
         document.body.addEventListener('click', (e) => {
             const selected = document.querySelector('.btn-row.selected .type');
@@ -1095,13 +1259,19 @@
             const zoomInput = document.getElementById('image-size-text');
             let scale = 1, baseScale = 1;
             let translateX = 0, translateY = 0;
-            let isDragging = false;
+            let isDragging = false, isPinching = false;
             let startX, startY, startTranslateX, startTranslateY;
-            function applyTransform() {imgView.style.transform = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${scale})`}
+            const svgContainer = document.getElementById('svg-container');
+
+            function applyTransform() {
+                const transformValue = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${scale})`;
+                imgView.style.transform = transformValue;
+                if (svgContainer.firstChild) svgContainer.style.transform = transformValue;
+            }
             function adjustBounds() {
                 const containerRect = imgContainer.getBoundingClientRect();
-                const currentWidth = imgView.naturalWidth * scale;
-                const currentHeight = imgView.naturalHeight * scale;
+                const currentWidth = (imgView.naturalWidth || imgView.width.baseVal.value) * scale;
+                const currentHeight = (imgView.naturalHeight || imgView.height.baseVal.value) * scale;
                 const xBound = Math.max(0, (currentWidth - containerRect.width) / 2);
                 const yBound = Math.max(0, (currentHeight - containerRect.height) / 2);
                 translateX = Math.max(-xBound, Math.min(xBound, translateX));
@@ -1134,13 +1304,31 @@
                 toggleElementState(zoomIn, zoomInputValue === 1000);
             }
             function resetAndRecalculateLayout() {
-                if (!imgView.src) return;
+                let naturalWidth, naturalHeight;
+                const isSvgImage = svgContainer.querySelector('svg');
+                if (isSvgImage) {
+                    const viewBox = isSvgImage.viewBox.baseVal;
+                    naturalWidth = viewBox.width;
+                    naturalHeight = viewBox.height;
+                } else if (imgView.naturalWidth > 0) {
+                    naturalWidth = imgView.naturalWidth;
+                    naturalHeight = imgView.naturalHeight;
+                } else return;
                 const containerRect = imgContainer.getBoundingClientRect();
-                baseScale = Math.min(containerRect.width / imgView.naturalWidth, containerRect.height / imgView.naturalHeight); scale = baseScale; translateX = 0; translateY = 0; applyTransform(); zoomInput.value = 100;
+                baseScale = Math.min(containerRect.width / naturalWidth, containerRect.height / naturalHeight); scale = baseScale; translateX = 0; translateY = 0; applyTransform(); zoomInput.value = 100;
             }
-            imgView.addEventListener('load', resetAndRecalculateLayout);
-            window.addEventListener('resize', resetAndRecalculateLayout);
-            imgContainer.addEventListener('mousedown', (e) => {e.preventDefault(); isDragging = true; startX = e.clientX; startY = e.clientY; startTranslateX = translateX; startTranslateY = translateY; imgView.style.transition = 'none';});
+            imgView.onload = () => {
+                const isSvg = svgContainer.querySelector('svg');
+                resetAndRecalculateLayout();
+                if (isSvg) {
+                    svgContainer.style.width = `${imgView.clientWidth}px`;
+                    svgContainer.style.height = `${imgView.clientHeight}px`;
+                }
+                hideLoader(currentLoadId);
+            };
+            imgView.onerror = () => hideLoader(currentLoadId);
+            new ResizeObserver(resetAndRecalculateLayout).observe(imgContainer);
+            imgContainer.addEventListener('mousedown', (e) => {e.preventDefault(); isDragging = true; startX = e.clientX; startY = e.clientY; startTranslateX = translateX; startTranslateY = translateY; imgView.style.transition = 'none'; if (svgContainer.firstChild) svgContainer.style.transition = 'none';});
             window.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
                 translateX = startTranslateX + (e.clientX - startX);
@@ -1150,6 +1338,7 @@
             window.addEventListener('mouseup', () => {
                 if (!isDragging) return;
                 isDragging = false;
+                if (svgContainer.firstChild) svgContainer.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
                 imgView.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
                 adjustBounds();
             });
@@ -1181,6 +1370,8 @@
             let initialDistance = null;
             let initialScale = null;
             imgContainer.addEventListener('touchstart', (e) => {
+                imgView.style.transition = 'none';
+                if (svgContainer.firstChild) svgContainer.style.transition = 'none';
                 if (e.touches.length === 1) {
                     e.preventDefault();
                     isDragging = true;
@@ -1188,7 +1379,6 @@
                     startY = e.touches[0].clientY;
                     startTranslateX = translateX;
                     startTranslateY = translateY;
-                    imgView.style.transition = 'none';
                 } else if (e.touches.length === 2) {
                     e.preventDefault();
                     isDragging = false;
@@ -1213,8 +1403,13 @@
                 }
             });
             imgContainer.addEventListener('touchend', (e) => {
-                if (e.touches.length < 2) {initialDistance = null; initialScale = null;}
-                if (isDragging && e.touches.length < 1) {isDragging = false}
+                if (e.touches.length < 2) {
+                    initialDistance = null;
+                    initialScale = null;
+                    if (isDragging) { isDragging = false; adjustBounds(); }
+                    if (svgContainer.firstChild) svgContainer.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                    imgView.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                }
             });
             imgContainer.addEventListener('contextmenu', (e) => {e.preventDefault()});
         }
