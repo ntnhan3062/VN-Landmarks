@@ -11,6 +11,8 @@
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
             user-select: none;
             font-family: 'Segoe UI', Tahoma, sans-serif;
         }
@@ -526,7 +528,7 @@
             height: fit-content;
             min-height: 25px;
             background: rgba(0, 0, 0, 0.8);
-            transition: opacity .25s ease;
+            transition: opacity .1s ease;
             color: white;
             font-size: 16px;
             border-radius: 5px;
@@ -543,20 +545,45 @@
             transition: all 0.2s ease;
             stroke-linejoin: round;
         }
-        svg {
-            pointer-events: none;
-        }
         .spinner {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid rgb(0, 115, 255);
+            /* border: 8px solid #f3f3f3; */
+            /* border-top: 8px solid rgb(0, 115, 255); */
+            background: conic-gradient(
+                from 0deg,
+                #f3f3f3 150deg,
+                #f3f3f3 150deg,
+                rgba(0, 115, 255, 1) 210deg,
+                rgba(0, 115, 255, 1) 320deg,
+                #f3f3f3 360deg
+            );
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 calc(100% - 8px));
             border-radius: 50%;
             width: 60px;
             height: 60px;
-            animation: spin 1s linear infinite;
+            animation: spin .3s linear infinite;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        #btn-change-mode-img {
+            justify-content: center;
+            align-items: center;
+            display: none;
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            background: #fff;
+            opacity: 0.75;
+            border-radius: 50%;
+            height: 40px;
+            width: 40px;
+            padding: 0;
+            cursor: pointer;
+            box-shadow: 0 0 3px 2px rgba(0,0,0,0.2);
+            transition: all 0.4s ease;
+            z-index: 80;
         }
     </style>
 </head>
@@ -568,6 +595,7 @@
         <div id="loading-overlay" style="display: none;"><div class="spinner"></div></div>
         <div id="message" style="height: 100%;width: 100%; text-align: center;   display: flex;  align-items: center;  justify-content: center; font-size: 30px;">Chọn 1 file để xem.</div>
         <div id="image" style="display: none;">
+            <i class="fa fa-info-circle fa-2x" id="btn-change-mode-img" aria-hidden="true"></i>
             <div id="img-zoom"><img id="img-view"><div id="svg-container"></div></div>
             <div id="img-control"><i class="fa fa-search-plus fa-2x" title= "Phóng to" id="zoom-in" aria-hidden="true"></i><i class="fa fa-search-minus fa-2x" title= "Thu nhỏ" id="zoom-out" aria-hidden="true"></i><i class="fa fa-search fa-2x" title= "Phóng cho vừa" id="zoom-default" aria-hidden="true"></i><i style="width: 125px;"><input type="number" id="image-size-text" min="10" max="1000" value="100"><span style="font-size: 30px; min-width: 35px; width: 35px;">%</span></i></div>
         </div>
@@ -616,6 +644,10 @@
         let isHome = true;
         let imageViewer = null;
         let currentLoadId = 0;
+        let svgTooltipDisplayNoneTimer = null;
+        let menuDisplayNoneTimer = null;
+        let isSvgInteractiveMode = false;
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.matchMedia('(pointer: coarse)').matches);
         function showLoader() {document.getElementById('loading-overlay').style.display = 'flex'}
         function hideLoader() {document.getElementById('loading-overlay').style.display = 'none'}
         function hideLoader(loadId) {if (loadId === currentLoadId) {document.getElementById('loading-overlay').style.display = 'none'}}
@@ -694,6 +726,7 @@
             const imgView = document.getElementById('img-view');
             document.getElementById('svg-container').innerHTML = '';
             videoPlayers.forEach(p => { p.pause(); p.removeAttribute('src'); p.load(); });
+            isSvgInteractiveMode = false; // Reset SVG interactive mode
             imgView.removeAttribute('src');
             ImageView.style.display = 'none';
             VideoView.style.display = 'none';
@@ -705,41 +738,75 @@
             const selectedRow = document.querySelector('.btn-row.selected');
             if (selectedRow) selectedRow.classList.remove('selected');
         }
+        let activeTooltip = { element: null, timer: null };
         function setupSvgTooltips() {
             const tooltip = document.getElementById('svg-tooltip');
             const objects = document.querySelectorAll('#svg-container .object');
-            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-            let activeTooltip = { element: null, timer: null };
+            function hideActiveTooltip() {
+                if (activeTooltip.element) {
+                    clearTimeout(activeTooltip.timer);
+                    objects.forEach(obj => {
+                        obj.style.stroke = 'rgba(0, 148, 255, 0.1)';
+                        obj.style.strokeWidth = '2px';
+                    });
+                    tooltip.style.opacity = '0';
+                    svgTooltipDisplayNoneTimer = setTimeout(() => { tooltip.style.display = 'none' }, 100);
+                    activeTooltip.element = null;
+                }
+            }
             objects.forEach(obj => {
                 const titleText = obj.dataset.title;
                 if (!titleText) return;
                 if (isTouchDevice) {
-                    obj.addEventListener('click', (e) => {
+                    let startX = 0;
+                    let startY = 0;
+                    obj.addEventListener('touchstart', (e) => {
                         e.stopPropagation();
-                        if (activeTooltip.element === obj) {
+                        const touch = e.touches[0];
+                        startX = touch.clientX;
+                        startY = touch.clientY;
+                    });
+                    obj.addEventListener('touchend', (e) => {
+                        e.stopPropagation();
+                        const touch = e.changedTouches[0];
+                        if (!touch) return;
+                        const deltaX = Math.abs(touch.clientX - startX);
+                        const deltaY = Math.abs(touch.clientY - startY);
+                        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                        if (distance <= 6) {
+                            if (activeTooltip.element === obj) {
+                                hideActiveTooltip();
+                                return;
+                            }
+                            clearTimeout(svgTooltipDisplayNoneTimer);
                             clearTimeout(activeTooltip.timer);
-                            tooltip.style.display = 'none';
-                            setTimeout(() => {tooltip.style.opacity = '0'}, 10);
-                            activeTooltip.element = null;
-                            return;
+                            objects.forEach(obj => {
+                                obj.style.stroke = 'rgba(0, 148, 255, 0.1)';
+                                obj.style.strokeWidth = '2px';
+                            });  
+                            obj.style.stroke = 'rgba(0, 148, 255, 1)';
+                            obj.style.strokeWidth = '15px';
+                            const rect = obj.getBoundingClientRect();
+                            tooltip.style.display = 'flex';
+                            tooltip.style.maxWidth = 'auto';
+                            tooltip.style.width = document.getElementById('viewer').offsetWidth-20+'px';
+                            tooltip.style.left = `${document.getElementById('viewer').offsetWidth/2-tooltip.offsetWidth/2}px`;
+                            tooltip.style.top = `${document.getElementById('viewer').offsetHeight/2-tooltip.offsetHeight/2}px`;
+                            tooltip.style.padding = '10px 5px';
+                            tooltip.style.textAlign = 'center';
+                            tooltip.style.justifyContent = 'center';
+                            setTimeout(() => {tooltip.textContent = titleText}, 5);
+                            setTimeout(() => { tooltip.style.opacity = '1'; }, 10);
+                            // tooltip.style.left = `${rect.left + rect.width / 2}px`;
+                            // tooltip.style.top = `${rect.top + rect.height / 2}px`;
+                            tooltip.style.transform = 'translate(0%, -50%)';
+                            activeTooltip.element = obj;
+                            activeTooltip.timer = setTimeout(() => {hideActiveTooltip()}, 3000);
                         }
-                        clearTimeout(activeTooltip.timer);
-                        const rect = obj.getBoundingClientRect();
-                        tooltip.textContent = titleText;
-                        tooltip.style.display = 'flex';
-                        setTimeout(() => {tooltip.style.opacity = '1'}, 10);
-                        tooltip.style.left = `${rect.left + rect.width / 2}px`;
-                        tooltip.style.top = `${rect.top + rect.height / 2}px`;
-                        tooltip.style.transform = 'translate(-50%, -50%)';
-                        activeTooltip.element = obj;
-                        activeTooltip.timer = setTimeout(() => {
-                            tooltip.style.display = 'none';
-                            setTimeout(() => {tooltip.style.opacity = '0'}, 10);
-                            activeTooltip.element = null;
-                        }, 3000);
                     });
                 } else {
                     obj.addEventListener('mouseover', () => {
+                        clearTimeout(svgTooltipDisplayNoneTimer);
                         tooltip.textContent = titleText;
                         tooltip.style.display = 'flex';
                         setTimeout(() => {tooltip.style.opacity = '1'}, 10);
@@ -764,20 +831,11 @@
                         tooltip.style.transform = 'none';
                     });
                     obj.addEventListener('mouseout', () => {
-                        tooltip.style.display = 'none';
-                        setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                        tooltip.style.opacity = '0';
+                        svgTooltipDisplayNoneTimer = setTimeout(() => {tooltip.style.display = 'none'}, 100);
                         obj.style.stroke = 'rgba(0, 148, 255, 0.1)';
                         obj.style.strokeWidth = '2px';
                     });
-                }
-            });
-            tooltip.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (isTouchDevice && activeTooltip.element) {
-                    clearTimeout(activeTooltip.timer);
-                    tooltip.style.display = 'none';
-                    setTimeout(() => {tooltip.style.opacity = '0'}, 10);
-                    activeTooltip.element = null;
                 }
             });
         }
@@ -810,6 +868,7 @@
             const VideoView = document.getElementById('video');
             const messageView = document.getElementById('message');
             const imgView = document.getElementById('img-view');
+            const imgZoom = document.getElementById('img-zoom');
             const svgContainer = document.getElementById('svg-container');
             const tooltip = document.getElementById('svg-tooltip');
             const loadId = ++currentLoadId;
@@ -823,18 +882,26 @@
                 svgContainer.style.display = 'none';
                 svgContainer.innerHTML = '';
                 tooltip.style.display = 'none';
-                setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                tooltip.style.opacity = '0';
                 imgView.src = path;
                 document.getElementById('viewer').style.padding = '10px';
             } else if (type === 'S-Image') {
                 ImageView.style.display = 'flex';
+                const btnChangeModeImg = document.getElementById('btn-change-mode-img');
+                if (btnChangeModeImg) {btnChangeModeImg.classList.remove('fa-arrows');btnChangeModeImg.classList.add('fa-info-circle');}
+                btnChangeModeImg.style.display = isTouchDevice ? 'flex' : 'none';
+                isSvgInteractiveMode = isTouchDevice ? false : true;
                 VideoView.style.display = 'none';
                 getActivePlayer()?.pause();
                 imgView.style.display = 'none';
-                svgContainer.style.display = 'none';
+                svgContainer.style.display = isTouchDevice ? 'none' : 'block';
+                imgZoom.style.pointerEvents = 'auto';
+                imgView.style.pointerEvents = 'auto';
+                svgContainer.style.pointerEvents = isTouchDevice ? 'none' : 'auto';
                 svgContainer.innerHTML = '';
                 tooltip.style.display = 'none';
-                setTimeout(() => {tooltip.style.opacity = '0'}, 10);
+                tooltip.style.opacity = '0';
+                CURRENT_MEDIA_TYPE = 'S-Image';
                 fetch(path)
                     .then(response => response.text())
                     .then(svgData => {
@@ -863,13 +930,13 @@
                             });
                             svgContainer.innerHTML = '';
                             svgContainer.appendChild(overlaySvg);
-                            svgContainer.style.display = 'block';
                             setupSvgTooltips();
                         }
                     })
                     .catch(err => {console.error('Error loading SVG:', err); hideLoader(loadId)});
                 document.getElementById('viewer').style.padding = '10px';
             } else if (type === 'Video') {
+                CURRENT_MEDIA_TYPE = 'Video'; // Set current media type
                 ImageView.style.display = 'none';
                 VideoView.style.display = 'block';
                 videoPlaylist = JSON.parse(path);
@@ -910,11 +977,35 @@
                 const locationKeyFromUrl = urlParams.get('location');
                 if (locationKeyFromUrl && ALL_DATA[locationKeyFromUrl]) {
                     CURRENT_LOCATION_KEY = locationKeyFromUrl;
+                    isSvgInteractiveMode = false;
                     showMainUI();
+                    const btnChangeModeImg = document.getElementById('btn-change-mode-img');
+                    const svgContainer = document.getElementById('svg-container');
+                    if (isTouchDevice) {
+                        btnChangeModeImg.style.display = 'flex';
+                        btnChangeModeImg.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            isSvgInteractiveMode = !isSvgInteractiveMode;
+                            if (isSvgInteractiveMode) {
+                                svgContainer.style.display = 'block';
+                                btnChangeModeImg.classList.remove('fa-info-circle');
+                                btnChangeModeImg.classList.add('fa-arrows');
+                                imgZoom.style.pointerEvents = 'none';
+                                imgView.style.pointerEvents = 'none';
+                                svgContainer.style.pointerEvents = 'auto';
+                            } else {
+                                svgContainer.style.display = 'none';
+                                btnChangeModeImg.classList.remove('fa-arrows');
+                                btnChangeModeImg.classList.add('fa-info-circle');
+                                imgZoom.style.pointerEvents = 'auto';
+                                imgView.style.pointerEvents = 'auto';
+                                svgContainer.style.pointerEvents = 'none';
+                                if (activeTooltip.element) { hideActiveTooltip(); }
+                            }
+                        });
+                    } else {btnChangeModeImg.style.display = 'none'}
                     initializeFileTable(ALL_DATA[locationKeyFromUrl].items, locationKeyFromUrl);
-                } else {
-                    showLocationSelection();
-                }
+                } else {showLocationSelection()}
             } catch (error) {
                 console.error("Không thể tải file data.json:", error);
                 let errorMessage = '<div class="location-item" style="background-color: #ffdddd; color: #d8000c; text-align: left; padding: 20px;">';
@@ -930,6 +1021,13 @@
             document.getElementById('message').style.display = 'flex';
             ImageView.style.display = 'none';
             VideoView.style.display = 'none';
+            function checkIsMobile() {
+                if (navigator.userAgentData && navigator.userAgentData.mobile !== undefined) {return navigator.userAgentData.mobile}
+                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+                return /android|blackberry|iphone|ipad|ipod|opera mini|iemobile|wpdesktop/i.test(userAgent);
+            }
+            document.body.style.padding = checkIsMobile() ? '2px' : '10px';
+            document.body.style.paddingBottom = checkIsMobile() ? '40px' : '10px';
         });
         document.getElementById('home').addEventListener('click', () => {
             closeMenu(true);
@@ -945,6 +1043,7 @@
         });
         function openMenu() {
             menu.style.display = 'flex';
+            clearTimeout(menuDisplayNoneTimer);
             document.body.classList.add('menu-open');
             menu.style.visibility = 'visible';
             menu.classList.add('active');
@@ -962,6 +1061,7 @@
             const menu = document.getElementById('menu');
             const overlay = document.getElementById('overlay');
             const btnMenu = document.querySelector('.btn-menu');
+            clearTimeout(menuDisplayNoneTimer);
             document.body.classList.remove('menu-open');
             menu.classList.add('closing');
             menu.classList.remove('active');
@@ -973,7 +1073,7 @@
                 btnMenu.classList.add('fa-bars');
             }, 200);
             const delay = instant ? 0 : 400;
-            setTimeout(() => {
+            menuDisplayNoneTimer = setTimeout(() => {
                 menu.classList.remove('closing');
                 menu.style.visibility = 'hidden';
                 overlay.classList.remove('closing');
@@ -1262,6 +1362,11 @@
             let isDragging = false, isPinching = false;
             let startX, startY, startTranslateX, startTranslateY;
             const svgContainer = document.getElementById('svg-container');
+            
+            // New variables for touch handling
+            let isTapCandidate = false;
+            let tapStartX = 0;
+            let tapStartY = 0;
 
             function applyTransform() {
                 const transformValue = `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${scale})`;
@@ -1313,7 +1418,17 @@
                 } else if (imgView.naturalWidth > 0) {
                     naturalWidth = imgView.naturalWidth;
                     naturalHeight = imgView.naturalHeight;
-                } else return;
+                }
+                if (naturalWidth <= 0 || naturalHeight <= 0) {
+                    console.warn("Image or SVG dimensions are invalid (<= 0). Cannot calculate baseScale.");
+                    baseScale = 1;
+                    scale = baseScale;
+                    translateX = 0;
+                    translateY = 0;
+                    applyTransform();
+                    zoomInput.value = 100;
+                    return;
+                }
                 const containerRect = imgContainer.getBoundingClientRect();
                 baseScale = Math.min(containerRect.width / naturalWidth, containerRect.height / naturalHeight); scale = baseScale; translateX = 0; translateY = 0; applyTransform(); zoomInput.value = 100;
             }
@@ -1348,18 +1463,22 @@
                 updateZoom(scale * delta, e.clientX, e.clientY);
             });
             document.getElementById('zoom-in').addEventListener('click', () => {
+                if (isSvgInteractiveMode) return;
                 const rect = imgContainer.getBoundingClientRect();
                 updateZoom(scale * 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
             });
             document.getElementById('zoom-out').addEventListener('click', () => {
+                if (isSvgInteractiveMode) return;
                 const rect = imgContainer.getBoundingClientRect();
                 updateZoom(scale / 1.2, rect.left + rect.width / 2, rect.top + rect.height / 2);
             });
             document.getElementById('zoom-default').addEventListener('click', () => {
+                if (isSvgInteractiveMode) return;
                 const rect = imgContainer.getBoundingClientRect();
                 updateZoom(baseScale, rect.left + rect.width / 2, rect.top + rect.height / 2);
             });
             zoomInput.addEventListener('change', () => {
+                if (isSvgInteractiveMode) return;
                 let percent = parseInt(zoomInput.value, 10);
                 if (isNaN(percent) || percent < 10) percent = 10;
                 if (percent > 1000) percent = 1000;
@@ -1370,6 +1489,7 @@
             let initialDistance = null;
             let initialScale = null;
             imgContainer.addEventListener('touchstart', (e) => {
+                if (isSvgInteractiveMode) return;
                 imgView.style.transition = 'none';
                 if (svgContainer.firstChild) svgContainer.style.transition = 'none';
                 if (e.touches.length === 1) {
@@ -1385,13 +1505,25 @@
                     initialDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
                     initialScale = scale;
                 }
-            });
+            }, { passive: false }); // Explicitly set passive to false
             imgContainer.addEventListener('touchmove', (e) => {
-                if (isDragging && e.touches.length === 1) {
-                    e.preventDefault();
-                    translateX = startTranslateX + (e.touches[0].clientX - startX);
-                    translateY = startTranslateY + (e.touches[0].clientY - startY);
-                    applyTransform();
+                if (isSvgInteractiveMode) return;
+                if (e.touches.length === 1) {
+                    if (isTapCandidate) {
+                        const currentX = e.touches[0].clientX;
+                        const currentY = e.touches[0].clientY;
+                        if (Math.abs(currentX - tapStartX) > moveThreshold || Math.abs(currentY - tapStartY) > moveThreshold) {
+                            isTapCandidate = false;
+                            isDragging = true;
+                            e.preventDefault();
+                        }
+                    }
+                    if (isDragging) {
+                        e.preventDefault();
+                        translateX = startTranslateX + (e.touches[0].clientX - startX);
+                        translateY = startTranslateY + (e.touches[0].clientY - startY);
+                        applyTransform();
+                    }
                 } else if (e.touches.length === 2) {
                     e.preventDefault();
                     const newDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -1401,15 +1533,23 @@
                     const centerY = (e.touches[0].pageY + e.touches[1].pageY) / 2;
                     updateZoom(newScale, centerX, centerY);
                 }
-            });
+            }, { passive: false });
             imgContainer.addEventListener('touchend', (e) => {
-                if (e.touches.length < 2) {
-                    initialDistance = null;
-                    initialScale = null;
-                    if (isDragging) { isDragging = false; adjustBounds(); }
-                    if (svgContainer.firstChild) svgContainer.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
-                    imgView.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                if (isSvgInteractiveMode) return;
+                if (isTapCandidate) {
+                    const tappedObject = e.target.closest('.object');
+                    if (tappedObject && window.handleSvgObjectTap) {
+                        window.handleSvgObjectTap(tappedObject);
+                        e.preventDefault();
+                    }
                 }
+                isDragging = false;
+                isTapCandidate = false;
+                initialDistance = null;
+                initialScale = null;
+                if (svgContainer.firstChild) svgContainer.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                imgView.style.transition = 'transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1)';
+                adjustBounds();
             });
             imgContainer.addEventListener('contextmenu', (e) => {e.preventDefault()});
         }
